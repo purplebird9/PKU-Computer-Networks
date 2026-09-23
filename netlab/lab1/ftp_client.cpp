@@ -4,9 +4,14 @@
 #include <unistd.h>
 #include <cstring>
 #include <cstdio>
+#include <sstream>
 #include "protocol.h"
 
 using namespace std;
+
+int sock = -1;
+
+void open_conn_request();
 
 int main() {
     cerr << "hello from ftp client" << endl;
@@ -19,8 +24,10 @@ int main() {
     bool established = false;
 
     string line;
+    printf("Client(none)>");
+    fflush(stdout);
     if (!getline(cin, line)) {
-        break;
+        return 0;
     }
     istringstream command_line(line);
     command_line >> command;
@@ -29,21 +36,29 @@ int main() {
         request_type = OPEN_CONN_REQUEST;
 
         // 1. Socket
-        int sock = socket(AF_INET, SOCK_STREAM, 0);
+        sock = socket(AF_INET, SOCK_STREAM, 0);
         struct sockaddr_in addr;
         addr.sin_port = htons(port); 
         addr.sin_family = AF_INET;
-        inet_pton(AF_INET, ip, &addr.sin_addr); // 表示我们要连接到服务器的127.0.0.1:12323
+        inet_pton(AF_INET, ip.c_str(), &addr.sin_addr); // 表示我们要连接到服务器的127.0.0.1:12323
 
-        // 2. Try connect
+        // 2. Try TCP connect
         printf("Try connect\n");
-        established = connect(sock, (struct sockaddr*)&addr, sizeof(addr)); // connect不成功默认阻塞。    
-        printf("Connected to %s:%hu\n", ip.c_str(), port);
+        established = (connect(sock, (struct sockaddr*)&addr, sizeof(addr)) == 0); // connect成功返回0，不成功默认阻塞。
+        if (established) {
+            printf("Connection established\n");
+        }
+
+        // 3. Request a connection
+        open_conn_request();
+
 
     }
 
-    // 3. Client Loop
+    // 4. Client Loop
     while(established){
+        printf("Client(%s:%hu)>", ip.c_str(), port);
+        fflush(stdout);
         // Parse command
         /*
         MyFTP 的 Client 支持以下的命令
@@ -56,6 +71,11 @@ int main() {
             quit: 如有连接则断开连接，回到 open 前的状态；如果已经是 open 前的状态，则关闭 Client
         */
 
+        if (!getline(cin, line)) {
+            break;
+        }
+        command_line.clear();
+        command_line.str(line);
         command_line >> command;
         if (command == "ls") {
             request_type = LIST_REQUEST;
@@ -93,6 +113,8 @@ int main() {
             case SHA_REQUEST:
                 break;
             case QUIT_REQUEST:
+                printf("Connection closed; Client idle.\n");
+                established = false;
                 break;
             default:
                 break;
@@ -106,7 +128,7 @@ int main() {
         printf("Client received\n");
     }
 
-    // 4. Close connection
+    // 5. Close connection
     return 0;
 }
 
@@ -114,10 +136,11 @@ int main() {
 /* ========================= Helpers ==========================*/
 
 // OPEN_CONN_REQUEST
-void open_conn_request(struct Header h){
-
-
+void open_conn_request(){
+    struct Header h{};
+    h.type = OPEN_CONN_REQUEST;
+    h.length = htonl(12); 
     // 把只有header的报文写进buf发给服务器
     send(sock, &h, sizeof(h), 0); 
-    printf("Client sent\n");
+    printf("Client sent OPEN_CONN_REQUEST\n");
 }
