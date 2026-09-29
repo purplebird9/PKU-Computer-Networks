@@ -23,7 +23,7 @@ struct __attribute((packed)) Header{
     unsigned char protocol[6] = {0xc1, 0xa1, 0x10, 'f', 't', 'p'};
     uint8_t type;    /* type (1 byte) */
     uint8_t status;  /* status (1 byte) */
-    uint32_t length; /* length (4 bytes) in Big endian */
+    uint32_t length; /* length of Header+Payload (4 bytes) in Big endian */
 };
 
 // Message type code

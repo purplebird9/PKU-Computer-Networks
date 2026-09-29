@@ -12,7 +12,8 @@ using namespace std;
 
 int sock = -1;
 
-void open_conn_request();
+bool open_conn_request();
+void list_request();
 
 int main() {
     cerr << "hello from ftp client" << endl;
@@ -53,7 +54,7 @@ int main() {
         }
 
         // 3. Request a connection
-        open_conn_request();
+        established = open_conn_request();
 
 
     }
@@ -133,13 +134,13 @@ int main() {
 /* ========================= Helpers ==========================*/
 
 // OPEN_CONN_REQUEST
-void open_conn_request(){
+bool open_conn_request(){
     // Request
     struct Header hc{};
     hc.type = OPEN_CONN_REQUEST;
     hc.length = htonl(12); 
     // 把只有header的报文写进buf发给服务器
-    send_all(sock, &hc, sizeof(hc), 0); 
+    send_all(sock, &hc, sizeof(hc)); 
     printf("Client sent OPEN_CONN_REQUEST\n");
 
     // Reply
@@ -147,9 +148,10 @@ void open_conn_request(){
     recv_all(sock, &hs, sizeof(hs));
     if(hs.type == OPEN_CONN_REPLY && hs.status == 1){
         printf("Connection accepted.\n");
+        return true;
     } else {
         printf("Connection refused. Client idle.\n");
-        established = false;
+        return false;
     }
 }
 
@@ -162,5 +164,4 @@ void list_request(){
     send(sock, &h, sizeof(h), 0);
     printf("Client sent LIST_REQUEST\n");   
 }
-
 
