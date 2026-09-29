@@ -25,41 +25,60 @@ int main() {
     MessageType request_type;
     bool established = false;
 
-    // IDLE
+    /* ====================== IDLE LOOP ========================*/
     string line;
-    printf("Client(none)>");
-    fflush(stdout);
-    if (!getline(cin, line)) {
-        return 0;
-    }
-    istringstream command_line(line);
-    command_line >> command;
-    if (command == "open") {
-        // IDLE ---> OPEN_CONNETION
-        command_line >> ip >> port;
+    istringstream command_line;
+    while (!established) {
+        printf("Client(none)>");
+        fflush(stdout);
+        if (!getline(cin, line)) {
+            return 0;
+        }
+
+        command_line.clear();
+        command_line.str(line);
+        command_line >> command;
+
+        if (command == "quit") {
+            return 0;
+        }
+        if (command != "open") {
+            continue;
+        }
+
+        /* ===================== OPEN_CONNETION =================== */
+        if (!(command_line >> ip >> port)) {
+            continue;
+        }
         request_type = OPEN_CONN_REQUEST;
 
         // 1. Socket
         sock = socket(AF_INET, SOCK_STREAM, 0);
-        struct sockaddr_in addr;
+        struct sockaddr_in addr{};
         addr.sin_port = htons(port); 
         addr.sin_family = AF_INET;
         inet_pton(AF_INET, ip.c_str(), &addr.sin_addr); // 表示我们要连接到服务器的127.0.0.1:12323
 
         // 2. Try TCP connect
         printf("Try connect\n");
-        established = (connect(sock, (struct sockaddr*)&addr, sizeof(addr)) == 0); // connect成功返回0，不成功默认阻塞。
-        if (established) {
-            printf("TCP Connection established\n");
+        if (connect(sock, (struct sockaddr*)&addr, sizeof(addr)) != 0) {
+            perror("connect");
+            close(sock);
+            sock = -1;
+            printf("TCP connection failed, idle\n");
+            continue;
         }
+        printf("TCP connection established\n");
 
         // 3. Request a connection
         established = open_conn_request();
-
-
+        if (!established) {
+            close(sock);
+            sock = -1;
+        }
     }
 
-    // 4. Client Loop
+    /* ====================== Client Main Loop ===================== */
     while(established){
         printf("Client(%s:%hu)>", ip.c_str(), port);
         fflush(stdout);
@@ -123,12 +142,13 @@ int main() {
             default:
                 break;
         }
-        printf("Client finished a request.\n");
+        printf("Client finished a request\n");
     }
 
-    // 5. Close connection
+    // Close connection
     return 0;
 }
+
 
 
 /* ========================= Helpers ==========================*/
@@ -145,12 +165,19 @@ bool open_conn_request(){
 
     // Reply
     struct Header hs{};
-    recv_all(sock, &hs, sizeof(hs));
+    if (!recv_all(sock, &hs, sizeof(hs), 1000)) {
+        if (errno == ETIMEDOUT) { // 端口被监听（TCP成功），但不是被MyFTP Server进程
+            fprintf(stderr, "OPEN_CONN_REPLY timeout after 1 second\n");
+        } else {
+            fprintf(stderr, "Failed to receive OPEN_CONN_REPLY\n");
+        }
+        return false;
+    }
     if(hs.type == OPEN_CONN_REPLY && hs.status == 1){
-        printf("Connection accepted.\n");
+        printf("Connection accepted\n");
         return true;
     } else {
-        printf("Connection refused. Client idle.\n");
+        printf("Connection refused, idle\n");
         return false;
     }
 }
@@ -164,4 +191,3 @@ void list_request(){
     send(sock, &h, sizeof(h), 0);
     printf("Client sent LIST_REQUEST\n");   
 }
-

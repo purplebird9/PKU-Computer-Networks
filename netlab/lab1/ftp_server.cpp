@@ -15,24 +15,27 @@ constexpr unsigned char kProtocolMagic[6] = {
 void open_conn_reply(int sock);
 
 void* handle_client(void* arg) {
-    printf("Accepted a client\n");
     int* p = static_cast<int*>(arg);
     int c_sock = *p; // Connection socket fd
     delete p;
+    printf("Accepted a client(fd=%d)\n",c_sock);
+
 
     bool connected = true;
-    // Server loop
+    // Server Loop
     while(connected){    
         // Receive a request
         struct Header hc{};
-        recv_all(c_sock, &hc, sizeof(hc));
+        if (!recv_all(c_sock, &hc, sizeof(hc))) {
+            break; //避免client断开后不断空转
+        }
 
         if (memcmp(hc.protocol, kProtocolMagic,
                         sizeof(kProtocolMagic)) != 0) {
             cerr << "Invalid protocol magic\n";
             return nullptr;
         }
-        printf("Server received\n");
+        printf("Server received request 0x%02X\n", hc.type);
 
         // Send a reply
         struct Header hs{};
@@ -63,7 +66,7 @@ void* handle_client(void* arg) {
 
 int main() {
     std::cerr << "hello from ftp server" << std::endl;
-/* ========================= Main Thread =========================*/
+    /* ========================= Main Thread =========================*/
     // 1. Socket
     int s_sock = socket(AF_INET, SOCK_STREAM, 0); // (domain, type, protocol)
     struct sockaddr_in addr; // 描述监听的地址
