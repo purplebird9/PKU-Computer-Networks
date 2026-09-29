@@ -6,6 +6,7 @@
 #include <cstdio>
 #include <sstream>
 #include "protocol.h"
+#include "io.h"
 
 using namespace std;
 
@@ -23,6 +24,7 @@ int main() {
     MessageType request_type;
     bool established = false;
 
+    // IDLE
     string line;
     printf("Client(none)>");
     fflush(stdout);
@@ -32,6 +34,7 @@ int main() {
     istringstream command_line(line);
     command_line >> command;
     if (command == "open") {
+        // IDLE ---> OPEN_CONNETION
         command_line >> ip >> port;
         request_type = OPEN_CONN_REQUEST;
 
@@ -46,7 +49,7 @@ int main() {
         printf("Try connect\n");
         established = (connect(sock, (struct sockaddr*)&addr, sizeof(addr)) == 0); // connect成功返回0，不成功默认阻塞。
         if (established) {
-            printf("Connection established\n");
+            printf("TCP Connection established\n");
         }
 
         // 3. Request a connection
@@ -103,7 +106,7 @@ int main() {
         
         switch (request_type) {
             case LIST_REQUEST:
-                break;
+                list_request();
             case CHANGE_DIR_REQUEST:
                 break;
             case GET_REQUEST:
@@ -119,13 +122,7 @@ int main() {
             default:
                 break;
         }
-        printf("Client sent\n");
-
-
-        // Receive a reply
-        char buffer[128];
-        recv(sock, buffer, 128, 0);
-        printf("Client received\n");
+        printf("Client finished a request.\n");
     }
 
     // 5. Close connection
@@ -137,10 +134,33 @@ int main() {
 
 // OPEN_CONN_REQUEST
 void open_conn_request(){
-    struct Header h{};
-    h.type = OPEN_CONN_REQUEST;
-    h.length = htonl(12); 
+    // Request
+    struct Header hc{};
+    hc.type = OPEN_CONN_REQUEST;
+    hc.length = htonl(12); 
     // 把只有header的报文写进buf发给服务器
-    send(sock, &h, sizeof(h), 0); 
+    send_all(sock, &hc, sizeof(hc), 0); 
     printf("Client sent OPEN_CONN_REQUEST\n");
+
+    // Reply
+    struct Header hs{};
+    recv_all(sock, &hs, sizeof(hs));
+    if(hs.type == OPEN_CONN_REPLY && hs.status == 1){
+        printf("Connection accepted.\n");
+    } else {
+        printf("Connection refused. Client idle.\n");
+        established = false;
+    }
 }
+
+
+// LIST_REQUEST
+void list_request(){
+    struct Header h{};
+    h.type = LIST_REQUEST;
+    h.length = htonl(12);
+    send(sock, &h, sizeof(h), 0);
+    printf("Client sent LIST_REQUEST\n");   
+}
+
+
