@@ -5,8 +5,17 @@
 #include <cerrno>
 #include <chrono>
 #include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <iostream>
 #include <poll.h>
 #include <sys/socket.h>
+
+#include "protocol.h"
+
+inline constexpr unsigned char kProtocolMagic[6] = {
+    0xc1, 0xa1, 0x10, 'f', 't', 'p'
+};
 
 // Send message bits by batch_size=len, until all bytes in buf are sent
 inline void send_all(int sock, const void *buf, size_t len) {
@@ -56,7 +65,6 @@ inline bool recv_all(int sock, void *buf, size_t len, int timeout_ms = -1) {
             }
         }
 
-
         ssize_t received = recv(sock, (char*)buf + total_received, len - total_received, 0);
         if (received < 0) {
             if (errno == EINTR) {
@@ -65,11 +73,24 @@ inline bool recv_all(int sock, void *buf, size_t len, int timeout_ms = -1) {
             perror("recv");
             return false; // 返回false,避免用exit()退出整个进程
         }
-
         if (received == 0) {
             return false;
         }
         total_received += received;
+    }
+    return true;
+}
+
+
+// Check if the received header matches the expected header
+inline bool check_header(const struct Header& h, uint8_t expected_type) {
+    if (memcmp(h.protocol, kProtocolMagic, sizeof(kProtocolMagic)) != 0) {
+        std::cerr << "Invalid protocol magic\n";
+        return false;
+    }
+    if (h.type != expected_type) {
+        fprintf(stderr, "Inconsistent message: expected 0x%02X, got 0x%02X\n", expected_type, h.type);
+        return false;
     }
     return true;
 }

@@ -11,10 +11,6 @@
 #include "server_replies.h"
 using namespace std;
 
-constexpr unsigned char kProtocolMagic[6] = {
-    0xc1, 0xa1, 0x10, 'f', 't', 'p'
-};
-
 void* handle_client(void* arg) {
     int* p = static_cast<int*>(arg);
     int c_sock = *p; // Connection socket fd
@@ -39,27 +35,27 @@ void* handle_client(void* arg) {
         printf("Server received request 0x%02X\n", hc.type);
 
         // Send a reply
-        struct Header hs{};
         switch (hc.type) {
         case OPEN_CONN_REQUEST:
-            //if (!send_header(session.fd, OPEN_CONN_REPLY,
-            //                 session.established ? 0 : 1)) {
-            //    close(session.fd);
-            //    return;
-            //}
-            //session.established = true;
             open_conn_reply(c_sock);
             break;
-        
         case LIST_REQUEST:
             list_reply(c_sock);
+            break;
+        case CHANGE_DIR_REQUEST:
+            break;
+        case GET_REQUEST:
+            get_reply(c_sock);
+            break;
+        case PUT_REQUEST:
+            break;
+        case SHA_REQUEST:
             break;
         case QUIT_REQUEST:
             connected = false;
             break;
 
         default:
-            // other requests
             break;
         }
     }
@@ -68,13 +64,17 @@ void* handle_client(void* arg) {
     return nullptr;
 }
 
-int main() {
+int main(int argc, char* argv[]) {
     std::cerr << "hello from ftp server" << std::endl;
+
     /* ========================= Main Thread =========================*/
+    const char* ip = argv[1];
+    int port = stoi(argv[2]);
+
     // 1. Socket
     int s_sock = socket(AF_INET, SOCK_STREAM, 0); // (domain, type, protocol)
     struct sockaddr_in addr; // 描述监听的地址
-    addr.sin_port = htons(12323); // 在12323端口监听, htons是host to network (short)的简称，表示进行大小端表示法转换，网络中一般使用大端法
+    addr.sin_port = htons(port); // 在12323端口监听, htons是host to network (short)的简称，表示进行大小端表示法转换，网络中一般使用大端法
     addr.sin_family = AF_INET; // 表示使用AF_INET地址族
     inet_pton(AF_INET, "127.0.0.1", &addr.sin_addr); // 监听127.0.0.1地址，将字符串表示转化为二进制表示
 

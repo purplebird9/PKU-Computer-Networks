@@ -128,12 +128,16 @@ int main() {
             case LIST_REQUEST:
                 list_request(h);
             case CHANGE_DIR_REQUEST:
+                change_dir_request(h);
                 break;
             case GET_REQUEST:
+                get_request(h, argument.c_str());
                 break;
             case PUT_REQUEST:
+                put_request(h);
                 break;
             case SHA_REQUEST:
+                sha_request(h);
                 break;
             case QUIT_REQUEST:
                 printf("Connection closed; Client idle.\n");
