@@ -5,6 +5,7 @@
 #include <cstring>
 #include <cstdio>
 #include <sstream>
+#include <vector>
 #include "protocol.h"
 #include "io.h"
 
@@ -13,7 +14,12 @@ using namespace std;
 int sock = -1;
 
 bool open_conn_request();
-void list_request();
+void list_request(struct Header& hc);
+
+constexpr unsigned char kProtocolMagic[6] = {
+    0xc1, 0xa1, 0x10, 'f', 't', 'p'
+};
+
 
 int main() {
     cerr << "hello from ftp client" << endl;
@@ -126,7 +132,7 @@ int main() {
         
         switch (request_type) {
             case LIST_REQUEST:
-                list_request();
+                list_request(h);
             case CHANGE_DIR_REQUEST:
                 break;
             case GET_REQUEST:
@@ -184,10 +190,45 @@ bool open_conn_request(){
 
 
 // LIST_REQUEST
-void list_request(){
-    struct Header h{};
-    h.type = LIST_REQUEST;
-    h.length = htonl(12);
-    send(sock, &h, sizeof(h), 0);
-    printf("Client sent LIST_REQUEST\n");   
+void list_request(struct Header& hc){
+    // Request
+    hc.length = htonl(12);
+    send(sock, &hc, sizeof(hc), 0);
+    printf("Client sent LIST_REQUEST\n");  
+
+    // Reply
+    struct Header hs{};
+
+    // 先读取固定长度的 Header
+    // TODO: 包装成检查header一致函数
+    if (!recv_all(sock, &hs, sizeof(hs))) {
+        fprintf(stderr, "Failed to receive LIST_REPLY\n");
+    }
+    if (memcmp(hc.protocol, kProtocolMagic,
+                    sizeof(kProtocolMagic)) != 0) {
+        cerr << "Invalid protocol magic\n";
+    }
+    if (hs.type != LIST_REPLY) {
+        fprintf(stderr, "Expected LIST_REPLY, got 0x%02X\n",
+                hs.type);
+    }
+
+    const uint32_t total_len = ntohl(hs.length);
+
+    const size_t payload_len =
+        total_len - sizeof(hs);
+
+    vector<char> payload(payload_len);
+
+    if (!recv_all(sock, payload.data(), payload.size())) {
+        fprintf(stderr, "Failed to receive LIST_REPLY payload\n");
+    }
+
+    if (payload.back() != '\0') {
+        fprintf(stderr, "LIST_REPLY is not null-terminated\n");
+    }
+
+    // 不输出最后的 '\0'
+    fwrite(payload.data(), 1, payload.size() - 1, stdout);
 }
+
