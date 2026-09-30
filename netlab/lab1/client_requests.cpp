@@ -89,7 +89,7 @@ void get_request(struct Header& hc, const char* filename){
         return;
     }
 
-    // file exists, receive FILE_DATA
+    // file exists, download
     struct Header hs_data{};
     if (!recv_all(sock, &hs_data, sizeof(hs_data)) ||
         !check_header(hs_data, FILE_DATA)) {
@@ -128,4 +128,58 @@ void get_request(struct Header& hc, const char* filename){
         fclose(file);
         printf("Client received file: %s\n", filename);
     }
+}
+
+
+
+void put_request(struct Header& hc, const char* filename){
+    // 检查filename是否存在
+    FILE* file = fopen(filename, "rb");
+     if (file == nullptr) {
+        printf("Client: file not found\n");
+        return;
+    }
+
+    // 获取file_size
+    fseek(file, 0, SEEK_END);
+    const long file_size = ftell(file);
+    rewind(file);
+    if (file_size < 0) {
+        perror("ftell");
+        fclose(file);
+        return;
+    }
+
+    // File exists, request
+    hc.length = htonl(12 + strlen(filename) + 1);
+    send_all(sock, &hc, sizeof(hc));
+    send_all(sock, filename, strlen(filename) + 1);
+    printf("Client sent PUT_REQUEST for file: %s\n", filename);
+
+    // Reply
+    struct Header hs{};
+    if (!recv_all(sock, &hs, sizeof(hs)) || !check_header(hs, PUT_REPLY)) {
+        return;
+    }
+
+    // Upload
+    struct Header hc_data{};
+    hc_data.type = FILE_DATA;
+    hc_data.length = htonl(sizeof(Header) + file_size);
+    send_all(sock, &hc_data, sizeof(hc_data));
+
+    // send file payload in chunks
+    char buffer[4096];
+    size_t bytes_read;
+    while ((bytes_read = fread(buffer, 1, sizeof(buffer), file)) > 0) {
+        send_all(sock, buffer, bytes_read);
+    }
+
+    if (ferror(file)) {
+        perror("fread");
+    }
+
+    fclose(file);
+
+    printf("Client sent PUT_REQUEST and FILE_DATA\n");
 }

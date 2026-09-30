@@ -48,6 +48,7 @@ void* handle_client(void* arg) {
             get_reply(c_sock);
             break;
         case PUT_REQUEST:
+            put_reply(c_sock);
             break;
         case SHA_REQUEST:
             break;

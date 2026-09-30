@@ -133,6 +133,7 @@ int main() {
                 get_request(h, argument.c_str());
                 break;
             case PUT_REQUEST:
+                put_request(h, argument.c_str());
                 break;
             case SHA_REQUEST:
                 break;

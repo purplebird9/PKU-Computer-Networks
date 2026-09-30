@@ -119,3 +119,68 @@ void get_reply(int sock)
 
     printf("Server sent GET_REPLY and FILE_DATA\n");
 }
+
+
+void put_reply(int sock)
+{
+    // Receive filename payload
+    string filename;
+    char ch;
+    do {
+        if (!recv_all(sock, &ch, sizeof(ch))) {
+            return;
+        }
+        if (ch != '\0') {
+            filename += ch;
+        }
+    } while (ch != '\0');
+
+    // Reply
+    struct Header hs{};
+    hs.type = PUT_REPLY;
+    hs.length = htonl(12);
+    send_all(sock, &hs, sizeof(hs));
+    printf("Server sent PUT_REPLY for file: %s\n", filename.c_str());
+
+
+    // Receive file_data header
+    struct Header hc_data{};
+    if (!recv_all(sock, &hc_data, sizeof(hc_data)) ||
+        !check_header(hc_data, FILE_DATA)) {
+        return;
+    }
+
+    const uint32_t total_len = ntohl(hc_data.length);
+    if (total_len < sizeof(hc_data)) {
+        fprintf(stderr, "Invalid FILE_DATA length\n");
+        return;
+    }
+
+    size_t remaining = total_len - sizeof(hc_data);
+    FILE* file = fopen(filename.c_str(), "wb"); // wb: write binary，不存在就创建、覆盖写
+    if (file == nullptr) {
+        perror("fopen");
+    }
+
+    // Download file in chunks
+    char buffer[4096]; //按chunk下载文件
+    while (remaining > 0) {
+        const size_t chunk_size =
+            remaining < sizeof(buffer) ? remaining : sizeof(buffer);
+        if (!recv_all(sock, buffer, chunk_size)) {
+            fprintf(stderr, "Failed to receive FILE_DATA payload\n");
+            if (file != nullptr) {
+                fclose(file);
+            }
+            return;
+        }
+        if (file != nullptr) {
+            fwrite(buffer, 1, chunk_size, file);
+        }
+        remaining -= chunk_size;
+    }
+    if (file != nullptr) {
+        fclose(file);
+        printf("Server received file: %s\n", filename.c_str());
+    }
+}
