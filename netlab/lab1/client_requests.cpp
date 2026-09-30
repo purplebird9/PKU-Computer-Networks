@@ -1,20 +1,15 @@
-#include "client_requests.h"
-
 #include <arpa/inet.h>
-
 #include <cerrno>
 #include <cstdio>
 #include <cstring>
 #include <iostream>
 #include <vector>
-
+#include "client_requests.h"
 #include "io.h"
+using namespace std;
 
 extern int sock;
 
-constexpr unsigned char kProtocolMagic[6] = {
-    0xc1, 0xa1, 0x10, 'f', 't', 'p'
-};
 
 // OPEN_CONN_REQUEST
 bool open_conn_request(){
@@ -45,6 +40,7 @@ bool open_conn_request(){
     }
 }
 
+
 // LIST_REQUEST
 void list_request(struct Header& hc){
     // Request
@@ -55,35 +51,81 @@ void list_request(struct Header& hc){
     // Reply
     struct Header hs{};
 
-    // 先读取固定长度的 Header
-    // TODO: 包装成检查header一致函数
-    if (!recv_all(sock, &hs, sizeof(hs))) {
-        fprintf(stderr, "Failed to receive LIST_REPLY\n");
+    // 1.读取固定长度的 Header
+    if (!recv_all(sock, &hs, sizeof(hs)) || !check_header(hs, LIST_REPLY)) {
+        return;
     }
-    if (memcmp(hc.protocol, kProtocolMagic,
-                    sizeof(kProtocolMagic)) != 0) {
-        std::cerr << "Invalid protocol magic\n";
-    }
-    if (hs.type != LIST_REPLY) {
-        fprintf(stderr, "Expected LIST_REPLY, got 0x%02X\n",
-                hs.type);
-    }
-
+    // 2.读取payload
     const uint32_t total_len = ntohl(hs.length);
-
-    const size_t payload_len =
-        total_len - sizeof(hs);
-
-    std::vector<char> payload(payload_len);
+    const size_t payload_len = total_len - sizeof(hs);
+    vector<char> payload(payload_len);
 
     if (!recv_all(sock, payload.data(), payload.size())) {
         fprintf(stderr, "Failed to receive LIST_REPLY payload\n");
     }
-
     if (payload.back() != '\0') {
         fprintf(stderr, "LIST_REPLY is not null-terminated\n");
     }
 
-    // 不输出最后的 '\0'
+    // 3.输出到stdout，不输出最后的 '\0'
     fwrite(payload.data(), 1, payload.size() - 1, stdout);
+}
+
+
+void get_request(struct Header& hc, const char* filename){
+    // Request
+    hc.length = htonl(12 + strlen(filename) + 1);
+    send_all(sock, &hc, sizeof(hc));
+    send_all(sock, filename, strlen(filename) + 1);
+    printf("Client sent GET_REQUEST for file: %s\n", filename);
+
+    // Reply
+    struct Header hs{};
+    if (!recv_all(sock, &hs, sizeof(hs)) || !check_header(hs, GET_REPLY)) {
+        return;
+    }
+    if(hs.status == 0){
+        printf("File %s not found on server\n", filename);
+        return;
+    }
+
+    // file exists, receive FILE_DATA
+    struct Header hs_data{};
+    if (!recv_all(sock, &hs_data, sizeof(hs_data)) ||
+        !check_header(hs_data, FILE_DATA)) {
+        return;
+    }
+
+    const uint32_t total_len = ntohl(hs_data.length);
+    if (total_len < sizeof(hs_data)) {
+        fprintf(stderr, "Invalid FILE_DATA length\n");
+        return;
+    }
+
+    size_t remaining = total_len - sizeof(hs_data);
+    FILE* file = fopen(filename, "wb"); // wb: write binary，不存在就创建、覆盖写
+    if (file == nullptr) {
+        perror("fopen");
+    }
+
+    char buffer[4096]; //按chunk下载文件
+    while (remaining > 0) {
+        const size_t chunk_size =
+            remaining < sizeof(buffer) ? remaining : sizeof(buffer);
+        if (!recv_all(sock, buffer, chunk_size)) {
+            fprintf(stderr, "Failed to receive FILE_DATA payload\n");
+            if (file != nullptr) {
+                fclose(file);
+            }
+            return;
+        }
+        if (file != nullptr) {
+            fwrite(buffer, 1, chunk_size, file);
+        }
+        remaining -= chunk_size;
+    }
+    if (file != nullptr) {
+        fclose(file);
+        printf("Client received file: %s\n", filename);
+    }
 }

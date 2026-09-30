@@ -17,7 +17,7 @@ inline constexpr unsigned char kProtocolMagic[6] = {
     0xc1, 0xa1, 0x10, 'f', 't', 'p'
 };
 
-// Send message bits by batch_size=len, until all bytes in buf are sent
+// 循环调用send，直到从buf往socket里完整发送len字节
 inline void send_all(int sock, const void *buf, size_t len) {
     size_t total_sent = 0;
     while (total_sent < len) {
@@ -32,7 +32,7 @@ inline void send_all(int sock, const void *buf, size_t len) {
 
 
 
-// Receive message bits by batch_size=len, until all bytes in buf are received
+// 循环调用recv，直到从socket里完整收到len字节，放进buf
 inline bool recv_all(int sock, void *buf, size_t len, int timeout_ms = -1) {
     size_t total_received = 0;
     const auto deadline = std::chrono::steady_clock::now() +
