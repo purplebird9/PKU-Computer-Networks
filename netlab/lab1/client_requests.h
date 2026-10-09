@@ -7,5 +7,5 @@ void list_request(struct Header& hc);
 void change_dir_request(struct Header& hc, const char* dir);
 void get_request(struct Header& hc, const char* filename);
 void put_request(struct Header& hc, const char* filename);
-void sha_request();
+void sha_request(struct Header& hc, const char* filename);
 void quit_request();

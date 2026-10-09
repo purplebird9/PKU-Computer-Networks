@@ -61,6 +61,7 @@ void* handle_client(void* arg) {
             put_reply(c_sock, cwd);
             break;
         case SHA_REQUEST:
+            sha_reply(c_sock, cwd);
             break;
         case QUIT_REQUEST:
             connected = false;

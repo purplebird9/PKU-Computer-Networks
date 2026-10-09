@@ -205,3 +205,53 @@ void change_dir_request(struct Header& hc, const char* dir){
         printf("Client: change directory success\n");
     }
 }
+
+
+
+void sha_request(struct Header& hc, const char* filename){
+    // Request
+    hc.length = htonl(12 + strlen(filename) + 1);
+    send_all(sock, &hc, sizeof(hc));
+    send_all(sock, filename, strlen(filename) + 1);
+    printf("Client sent SHA_REQUEST for file: %s\n", filename);
+
+    // Reply
+    struct Header hs{};
+    if (!recv_all(sock, &hs, sizeof(hs)) || !check_header(hs, SHA_REPLY)) {
+        return;
+    }
+    if (ntohl(hs.length) != sizeof(hs)) {
+        fprintf(stderr, "Invalid SHA_REPLY length\n");
+        return;
+    }
+
+    if(hs.status == 0){
+        printf("Client: file not found on server\n");
+        return;
+    }
+
+    // file exists, receive SHA256 hash payload
+    struct Header hs_data{};
+    if (!recv_all(sock, &hs_data, sizeof(hs_data)) ||
+        !check_header(hs_data, FILE_DATA)) {
+        return;
+    }
+    const uint32_t total_len = ntohl(hs_data.length);
+    if (total_len != sizeof(hs_data) + 65) {
+        fprintf(stderr, "Invalid SHA FILE_DATA length\n");
+        return;
+    }
+    const size_t payload_len = total_len - sizeof(hs_data);
+    vector<char> payload(payload_len);
+
+    if (!recv_all(sock, payload.data(), payload.size())) {
+        fprintf(stderr, "Failed to receive SHA_REPLY payload\n");
+        return;
+    }
+    if (payload.back() != '\0') {
+        fprintf(stderr, "SHA_REPLY is not null-terminated\n");
+        return;
+    }
+    // 打印SHA到屏幕上
+    printf("%s\n", payload.data());
+}

@@ -138,6 +138,7 @@ int main() {
                 put_request(h, argument.c_str());
                 break;
             case SHA_REQUEST:
+                sha_request(h, argument.c_str());
                 break;
             case QUIT_REQUEST:
                 printf("Connection closed; Client idle.\n");
