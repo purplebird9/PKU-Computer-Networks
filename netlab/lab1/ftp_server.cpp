@@ -1,5 +1,6 @@
 #include <iostream>
 #include <cstdio>
+#include <filesystem>
 #include <string>
 #include <arpa/inet.h>
 #include <pthread.h>
@@ -11,10 +12,18 @@
 #include "server_replies.h"
 using namespace std;
 
+struct ClientSession {
+    int sock;
+    filesystem::path current_dir;
+    ClientSession(int s, const filesystem::path& dir) : sock(s), current_dir(dir) {}
+};
+
+// 服务一个client的thread函数
 void* handle_client(void* arg) {
-    int* p = static_cast<int*>(arg);
-    int c_sock = *p; // Connection socket fd
-    delete p;
+    ClientSession* session = static_cast<ClientSession*>(arg);
+    int c_sock = session->sock; // Connection socket fd
+    filesystem::path cwd = session->current_dir;// 这个client视角下的cwd
+    delete session;
     printf("Accepted a client(fd=%d)\n",c_sock);
 
 
@@ -40,15 +49,16 @@ void* handle_client(void* arg) {
             open_conn_reply(c_sock);
             break;
         case LIST_REQUEST:
-            list_reply(c_sock);
+            list_reply(c_sock, cwd);
             break;
         case CHANGE_DIR_REQUEST:
+            change_dir_reply(c_sock, cwd);
             break;
         case GET_REQUEST:
-            get_reply(c_sock);
+            get_reply(c_sock, cwd);
             break;
         case PUT_REQUEST:
-            put_reply(c_sock);
+            put_reply(c_sock, cwd);
             break;
         case SHA_REQUEST:
             break;
@@ -86,13 +96,15 @@ int main(int argc, char* argv[]) {
     listen(s_sock, 128); // 128: pending connection backlog
 
 
+    filesystem::path server_dir = filesystem::current_path();
     while (true) {
         // 4. Accept a client
-        int* c_sock = new int(accept(s_sock, nullptr, nullptr));
+        int c_sock = accept(s_sock, nullptr, nullptr);
+        ClientSession* session = new ClientSession(c_sock, server_dir);
 
         /*====================== Child Thread =======================*/
         pthread_t thread;
-        pthread_create(&thread, nullptr, handle_client, c_sock);
+        pthread_create(&thread, nullptr, handle_client, session);
         pthread_detach(thread);
     }
 

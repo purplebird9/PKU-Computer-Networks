@@ -1,15 +1,18 @@
 #include <arpa/inet.h>
+#include <algorithm>
 #include <cstdio>
+#include <filesystem>
 #include <string>
+#include <vector>
 #include "server_replies.h"
 
 #include "protocol.h"
 #include "io.h"
 
 using namespace std;
+namespace fs = std::filesystem;
 
 
-// OPEN_CONN_REPLY
 void open_conn_reply(int sock){
     struct Header hs{};
     hs.type = OPEN_CONN_REPLY;
@@ -19,24 +22,23 @@ void open_conn_reply(int sock){
     printf("Server sent OPEN_CONN_REPLY\n");
 }
 
-// LIST_REPLY
-void list_reply(int client_sock)
+void list_reply(int client_sock, const fs::path& cwd)
 {
-    FILE* pipe = popen("ls", "r");
-    if (pipe == nullptr) {
-        perror("popen");
+    vector<string> filenames;
+    // 因为一个线程一个cwd，但是popen列出整个server进程的真实目录
+    // 所以不能用popen
+    for (const auto& entry : fs::directory_iterator(cwd)) {
+        if (entry.is_regular_file()) {
+            filenames.push_back(entry.path().filename().string());
+        }
+    }
+    sort(filenames.begin(), filenames.end());
+
+    string result;
+    for (const string& filename : filenames) {
+        result += filename + "\n";
     }
 
-    std::string result;
-    char buffer[512];
-
-    while (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
-        result += buffer;
-    }
-
-    if (pclose(pipe) == -1) {
-        perror("pclose");
-    }
     Header reply{};
     reply.type = LIST_REPLY;
     reply.status = 0;
@@ -53,8 +55,7 @@ void list_reply(int client_sock)
 }
 
 
-// GET_REPLY
-void get_reply(int sock)
+void get_reply(int sock, const fs::path& cwd)
 {
     // Receive filename payload
     string filename;
@@ -68,7 +69,8 @@ void get_reply(int sock)
         }
     } while (ch != '\0');
 
-    FILE* file = fopen(filename.c_str(), "rb"); // rb: read binary,只读
+    fs::path file_path = cwd / filename;
+    FILE* file = fopen(file_path.c_str(), "rb"); // rb: read binary,只读
 
     Header reply{};
     reply.type = GET_REPLY;
@@ -121,7 +123,7 @@ void get_reply(int sock)
 }
 
 
-void put_reply(int sock)
+void put_reply(int sock, const fs::path& cwd)
 {
     // Receive filename payload
     string filename;
@@ -157,7 +159,8 @@ void put_reply(int sock)
     }
 
     size_t remaining = total_len - sizeof(hc_data);
-    FILE* file = fopen(filename.c_str(), "wb"); // wb: write binary，不存在就创建、覆盖写
+    fs::path file_path = cwd / filename;
+    FILE* file = fopen(file_path.c_str(), "wb"); // wb: write binary，不存在就创建、覆盖写
     if (file == nullptr) {
         perror("fopen");
     }
@@ -183,4 +186,46 @@ void put_reply(int sock)
         fclose(file);
         printf("Server received file: %s\n", filename.c_str());
     }
+}
+
+
+void change_dir_reply(int sock, fs::path& cwd)
+{
+    // Receive directory name payload
+    string dir;
+    char ch;
+    do {
+        if (!recv_all(sock, &ch, sizeof(ch))) {
+            return;
+        }
+        if (ch != '\0') {
+            dir += ch;
+        }
+    } while (ch != '\0');
+
+    // Attempt to change directory
+    // 仅对于这个特定client，其它client的工作目录不能影响
+
+    fs::path requested_dir(dir);
+    fs::path new_dir;
+    error_code ec;
+    if (!requested_dir.is_absolute()) {// 如果是相对路径，则基于当前工作目录
+        new_dir = fs::canonical(cwd / requested_dir, ec); //canonical:返回绝对路径
+    }
+    else{
+        new_dir = fs::canonical(requested_dir, ec);
+    }
+    bool success = !ec && fs::is_directory(new_dir, ec);
+    if (success) {
+        cwd = new_dir;
+    }
+
+    // Reply
+    struct Header hs{};
+    hs.type = CHANGE_DIR_REPLY;
+    hs.status = success ? 1 : 0; // 1 for success, 0 for failure
+    hs.length = htonl(12);
+    send_all(sock, &hs, sizeof(hs));
+    printf("Server sent CHANGE_DIR_REPLY for directory: %s with status: %d\n", dir.c_str(), hs.status);
+    
 }

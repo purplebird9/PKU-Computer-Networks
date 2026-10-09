@@ -127,7 +127,9 @@ int main() {
         switch (request_type) {
             case LIST_REQUEST:
                 list_request(h);
+                break;
             case CHANGE_DIR_REQUEST:
+                change_dir_request(h, argument.c_str());
                 break;
             case GET_REQUEST:
                 get_request(h, argument.c_str());

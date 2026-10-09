@@ -11,7 +11,6 @@ using namespace std;
 extern int sock;
 
 
-// OPEN_CONN_REQUEST
 bool open_conn_request(){
     // Request
     struct Header hc{};
@@ -41,7 +40,6 @@ bool open_conn_request(){
 }
 
 
-// LIST_REQUEST
 void list_request(struct Header& hc){
     // Request
     hc.length = htonl(12);
@@ -182,4 +180,28 @@ void put_request(struct Header& hc, const char* filename){
     fclose(file);
 
     printf("Client sent PUT_REQUEST and FILE_DATA\n");
+}
+
+
+
+void change_dir_request(struct Header& hc, const char* dir){
+    // Request
+    hc.length = htonl(12+ strlen(dir) + 1);
+    send_all(sock, &hc, sizeof(hc));
+    send_all(sock, dir, strlen(dir) + 1);
+    printf("Client sent CHANGE_DIR_REQUEST\n");
+
+    // Reply
+    struct Header hs{};
+
+    if (!recv_all(sock, &hs, sizeof(hs)) || !check_header(hs, CHANGE_DIR_REPLY)) {
+        return;
+    }
+
+    // cd失败提示
+    if(hs.status == 0){
+        printf("Client: change directory failed\n");
+    } else {
+        printf("Client: change directory success\n");
+    }
 }

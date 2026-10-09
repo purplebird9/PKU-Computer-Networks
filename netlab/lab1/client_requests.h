@@ -4,7 +4,7 @@
 
 bool open_conn_request();
 void list_request(struct Header& hc);
-void change_dir_request();
+void change_dir_request(struct Header& hc, const char* dir);
 void get_request(struct Header& hc, const char* filename);
 void put_request(struct Header& hc, const char* filename);
 void sha_request();
