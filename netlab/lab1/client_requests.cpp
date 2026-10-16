@@ -255,3 +255,20 @@ void sha_request(struct Header& hc, const char* filename){
     // 打印SHA到屏幕上
     printf("%s\n", payload.data());
 }
+
+
+void quit_request(){
+    // Request
+    struct Header hc{};
+    hc.type = QUIT_REQUEST;
+    hc.length = htonl(12);
+    send_all(sock, &hc, sizeof(hc));
+    printf("Client sent QUIT_REQUEST\n");
+
+    // Reply
+    struct Header hs{};
+    if (!recv_all(sock, &hs, sizeof(hs)) || !check_header(hs, QUIT_REPLY)) {
+        return;
+    }
+    printf("Client received QUIT_REPLY\n");
+}

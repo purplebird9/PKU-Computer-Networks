@@ -25,6 +25,7 @@ int main() {
     MessageType request_type;
     bool established = false;
 
+    while (true) {
     /* ====================== IDLE LOOP ========================*/
     string line;
     istringstream command_line;
@@ -39,7 +40,7 @@ int main() {
         command_line.str(line);
         command_line >> command;
 
-        if (command == "quit") {
+        if (command == "quit") { // IDLE-->END
             return 0;
         }
         if (command != "open") {
@@ -141,6 +142,9 @@ int main() {
                 sha_request(h, argument.c_str());
                 break;
             case QUIT_REQUEST:
+                quit_request();
+                close(sock);
+                sock = -1;
                 printf("Connection closed; Client idle.\n");
                 established = false;
                 break;
@@ -148,6 +152,7 @@ int main() {
                 break;
         }
         printf("Client finished a request\n");
+    }
     }
 
     // Close connection

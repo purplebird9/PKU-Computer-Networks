@@ -12,6 +12,7 @@
 using namespace std;
 namespace fs = std::filesystem;
 
+// Helper to quote a string for shell command
 static string shell_quote(const string& value)
 {
     string result = "'";
@@ -306,4 +307,14 @@ void sha_reply(int sock, const fs::path& cwd)
     send_all(sock, hash, sizeof(hash));
 
     printf("Server sent SHA_REPLY and FILE_DATA\n");
+}
+
+
+void quit_reply(int sock)
+{
+    struct Header hs{};
+    hs.type = QUIT_REPLY;
+    hs.length = htonl(12);
+    send_all(sock, &hs, sizeof(hs));
+    printf("Server sent QUIT_REPLY\n");
 }

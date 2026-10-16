@@ -64,6 +64,7 @@ void* handle_client(void* arg) {
             sha_reply(c_sock, cwd);
             break;
         case QUIT_REQUEST:
+            quit_reply(c_sock);
             connected = false;
             break;
 
@@ -91,10 +92,18 @@ int main(int argc, char* argv[]) {
     inet_pton(AF_INET, "127.0.0.1", &addr.sin_addr); // 监听127.0.0.1地址，将字符串表示转化为二进制表示
 
     // 2. Bind
-    bind(s_sock, (struct sockaddr*)&addr, sizeof(addr)); // addr = ip + port
+    if (bind(s_sock, (struct sockaddr*)&addr, sizeof(addr)) < 0) { // addr = ip + port
+        perror("bind");
+        close(s_sock);
+        return 1;
+    }
 
     // 3. Listen
-    listen(s_sock, 128); // 128: pending connection backlog
+    if (listen(s_sock, 128) < 0) { // 128: pending connection backlog
+        perror("listen");
+        close(s_sock);
+        return 1;
+    }
 
 
     filesystem::path server_dir = filesystem::current_path();
